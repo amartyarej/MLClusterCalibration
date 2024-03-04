@@ -4,6 +4,11 @@
 
 If you are running on the Chicago server, you do not really need to do much (all dependencies are already installed). If you are not running on the Chicago servers, you can find all the packages needed in the file called environment.yml
 
+For using Dortmund E4, use:
+```
+conda activate swbase
+```
+
 
 The first code you need reads the ROOT file that contains the clusters info, transforms the input features and split the dataset into train, val, test.
 The whole dataset is also stored, unchanged, in order to be able to plot the prediction at the end w.r.t. variables we do not train on.

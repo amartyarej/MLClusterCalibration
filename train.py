@@ -51,8 +51,23 @@ parser.add_argument('--closure',  dest='closure',  action='store_const', const=T
 parser.add_argument('--weight',   dest='weight',   type=int, default=0, help='Weight: 0: no weight 1: response, 2: response wider, 3: energy, 4: log energy')
 parser.add_argument('--outdir',   dest='outdir',   type=str, default='', help='Directory with output is stored')
 
-
 args = parser.parse_args()
+
+def loss_wrapper(Ecluster): # NOT WORKING -- TO BE FIXED
+    def lgk_loss_function_modified(y_true, y_pred): ## https://arxiv.org/pdf/1910.03773.pdf
+        alpha = tf.constant(0.05)
+        bandwith = tf.constant(0.1)
+        pi = tf.constant(math.pi)
+        ## LGK (h and alpha are hyperparameters)
+        norm = -1/(bandwith*tf.math.sqrt(2*pi))
+        gaussian_kernel  = norm * tf.math.exp( -(y_pred/y_true - 1)**2 / (2*(bandwith**2)))
+        leakiness = alpha*tf.math.abs(y_pred/y_true - 1)
+        lgk_loss = gaussian_kernel + leakiness
+        loss = lgk_loss
+        if Ecluster/y_pred > 0.3:
+            loss += 1e10
+        return loss
+    return lgk_loss_function_modified
 
 def lgk_loss_function(y_true, y_pred): ## https://arxiv.org/pdf/1910.03773.pdf
     alpha = tf.constant(0.05)
@@ -65,6 +80,7 @@ def lgk_loss_function(y_true, y_pred): ## https://arxiv.org/pdf/1910.03773.pdf
     lgk_loss = gaussian_kernel + leakiness
     loss = lgk_loss
     return loss
+
 
 def lgk_loss_function_1(y_true, y_pred): ## https://arxiv.org/pdf/1910.03773.pdf
     alpha = tf.constant(0.05)
@@ -84,10 +100,10 @@ def build_and_compile_model(X_train, lr):
                                              layers.Dense(128, activation="swish"),
                                              layers.Dense(64,  activation="swish"),
                                              layers.Dense(8,   activation="swish"),
-                                             layers.Dense(1,   activation='tanhPlusOne')])
-    model.compile(loss=lgk_loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=lr), weighted_metrics=[])
+                                             layers.Dense(1,   activation="relu")]) #'tanhPlusOne')]) #
+    model.compile(loss=lgk_loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=lr))
+    #model.compile(loss=loss_wrapper(X_train[:,1]), optimizer=tf.keras.optimizers.Adam(learning_rate=lr)) #, weighted_metrics=[]
     return model
-
 
 # Main function.
 def main():
@@ -99,56 +115,72 @@ def main():
         print("{} already exists".format(dir_path))
     pass
 
+    good_list_16  = np.array([0., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    good_list_11 = np.array([0., 1., 1., 1., 1., 1., 1., 0., 0., 1., 1., 1., 0., 1., 1., 0., 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    good_list_22 = np.array([0., 1., 1., 1., 1., 1., 1., 0., 0., 1., 1., 1., 0., 1., 1., 1., 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
+
     # train dataset
     dataset_train = np.load('data/all_info_df_train.npy')
-    x_train = dataset_train[:, 5:]
+    #x_train_16 = dataset_train.compress(good_list_16, axis=1)
+    x_train_11 = dataset_train.compress(good_list_11, axis=1)
+    #x_train = dataset_train[:, 1:]
     y_train = dataset_train[:, 0]
     # w_train = dataset_train[:, 4] ## 1: response, 2: response wider, 3: energy, 4: log energy
-    data_train = np.concatenate([x_train, y_train[:, None]], axis=-1)
-    print(f"Training dataset size {y_train.shape[0]}")
+    #data_train = np.concatenate([x_train, y_train[:, None]], axis=-1)
+    print(f"Training dataset size {y_train.shape}")
 
-    # val dataset
-    dataset_val = np.load('data/all_info_df_val.npy')
-    x_val = dataset_val[:, 5:]
-    y_val = dataset_val[:, 0]
-    data_val = np.concatenate([x_val, y_val[:, None]], axis=-1)
-    print(f"Validation dataset size {y_val.shape[0]}")
+    ## val dataset
+    #dataset_val = np.load('data/all_info_df_val.npy')
+    #x_val = dataset_val.compress(good_list, axis=1)
+    ##x_val = dataset_val[:, 1:]
+    #y_val = dataset_val[:, 0]
+    #data_val = np.concatenate([x_val, y_val[:, None]], axis=-1)
+    #print(f"Validation dataset size {y_val.shape}")
 
     # test dataset
+    print('Reading test datasets...\n')
     dataset_test = np.load('data/all_info_df_test.npy')
-    x_test = dataset_test[:, 5:]
+    x_test_11 = dataset_test.compress(good_list_11, axis=1)
+    #x_test_16 = dataset_test.compress(good_list_16, axis=1)
+    #x_test_22 = dataset_test.compress(good_list_22, axis=1)
     y_test = dataset_test[:, 0]
-    data_test = np.concatenate([x_test, y_test[:, None]], axis=-1)
-    print(f"Test dataset size {y_test.shape[0]}")
+
+    dataset_test_forjet = np.load('data/all_info_df_test_forjet.npy')
+    x_test_forjet_11 = dataset_test_forjet.compress(good_list_11, axis=1)
+    #x_test_forjet_16 = dataset_test_forjet.compress(good_list_16, axis=1)
+    #x_test_forjet_22 = dataset_test_forjet.compress(good_list_22, axis=1)
+    #y_test_forjet = dataset_test_forjet[:, 0]
+    
+    #data_test = np.concatenate([x_test, y_test[:, None]], axis=-1)
+    print(f"Test dataset size {y_test.shape}")
 
     if args.train:
         nepochs = 100
         with tf.device('/GPU:0'):
-            dnn_model = build_and_compile_model(x_train, lr=0.0001)
-            history = dnn_model.fit( x_train, y_train, validation_split=0.35, epochs=nepochs, batch_size=4096) # batch_size=1024 
+            dnn_model = build_and_compile_model(x_train_11, lr=0.0001)
+            history = dnn_model.fit( x_train_11, y_train, validation_split=0.35, epochs=nepochs, batch_size=4096) # batch_size=1024 
 
         metrics = pd.DataFrame({"Train_Loss":history.history['loss'],"Val_Loss":history.history['val_loss']})
-        metrics.to_csv('Losses_train_leakiness.csv', index = False)
+        metrics.to_csv('out/Losses_train_redRelu.csv', index = False)
         fig, ax = plt.subplots()
         ax.plot(history.history['loss'], label='loss')
         ax.plot(history.history['val_loss'], label='val_loss')
         ax.set_xlabel('Epoch')
         plt.legend()
         plt.grid(True)
-        plt.savefig(dir_path + '/Losses_train_leakiness.png')
+        plt.savefig(dir_path + '/Losses_train_redRelu.png')
         plt.clf()
-        dnn_model.save(dir_path+"/model_leakiness.h5")
+        dnn_model.save(dir_path+"/model_redRelu.h5")
 
     if args.retrain:
         nepochs = 100
-        with tf.device('/GPU:0'):
-            dnn_model = tf.keras.models.load_model(dir_path+"/model_leakiness.h5", compile=False, custom_objects={'swish': swish, 'tanhPlusOne': tanhPlusOne})
-            dnn_model.compile(loss=lgk_loss_function_1, optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), weighted_metrics=[])
-            history = dnn_model.fit( x_train, y_train, validation_split=0.35, epochs=nepochs, batch_size=4096) # batch_size=1024 
-
+        #with tf.device('0'):
+        dnn_model = tf.keras.models.load_model(dir_path+"/model_redRelu.h5", compile=False, custom_objects={'swish': swish, 'tanhPlusOne': tanhPlusOne})
+        dnn_model.compile(loss=lgk_loss_function_1, optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), weighted_metrics=[])
+        history = dnn_model.fit( x_train_11, y_train, validation_split=0.35, epochs=nepochs, batch_size=4096) # batch_size=1024 
 
         metrics = pd.DataFrame({"Train_Loss":history.history['loss'],"Val_Loss":history.history['val_loss']})
-        metrics.to_csv('Losses_final.csv', index = False)
+        metrics.to_csv('out/Losses_final_redRelu.csv', index = False)
 
         fig, ax = plt.subplots()
         ax.plot(history.history['loss'], label='loss')
@@ -156,30 +188,38 @@ def main():
         ax.set_xlabel('Epoch')
         plt.legend()
         plt.grid(True)
-        plt.savefig(dir_path + '/Losses_final.png')
+        plt.savefig(dir_path + '/Losses_final_redRelu.png')
         plt.clf()
-        dnn_model.save(dir_path+"/model.h5")
+        dnn_model.save(dir_path+"/model_redRelu.h5")
 
     ## testing
     if args.test:
-        dnn_model = tf.keras.models.load_model(dir_path+"/model.h5", compile=False)
+        dnn_model = tf.keras.models.load_model(dir_path+"/model_redRelu.h5", compile=False)
         if dnn_model == None:
             return
-        y_pred = dnn_model.predict(x_test).flatten()
+        print('Calculating predictions...\n')
+        #y_pred_forjet = dnn_model.predict(x_test_forjet_16).flatten()
+        y_pred_forjet = dnn_model.predict(x_test_forjet_11).flatten()
+        #y_pred = dnn_model.predict(x_test_16).flatten()
+        y_pred = dnn_model.predict(x_test_11).flatten()
         ### start saving output
-        np.save(dir_path + '/trueResponse.npy', y_test)
-        np.save(dir_path + '/predResponse.npy', y_pred)
-        np.save(dir_path + '/x_test.npy',       x_test)
+        print('Saving outputs...')
+        #np.save(dir_path + '/trueResponse_redRelu.npy', y_test)
+        np.save(dir_path + '/predResponse_redRelu.npy', y_pred)
+        #np.save(dir_path + '/trueResponse_forjet_redRelu.npy', y_test_forjet)
+        np.save(dir_path + '/predResponse_forjet_redRelu.npy', y_pred_forjet)
+        #np.save(dir_path + '/x_test.npy',       x_test_22)
+        #np.save(dir_path + '/x_test_forjet.npy',x_test_forjet_22)
 
     if args.closure:
-        dnn_model = tf.keras.models.load_model(dir_path+"/model.h5", compile=False)
+        dnn_model = tf.keras.models.load_model(dir_path+"/model_redRelu.h5", compile=False)
         if dnn_model == None:
             return
         y_pred = dnn_model.predict(x_train).flatten()
         ### start saving output
-        np.save(dir_path + '/trueResponse_closure.npy', y_train)
-        np.save(dir_path + '/predResponse_closure.npy', y_pred)
-        np.save(dir_path + '/x_train.npy',       x_train)
+        np.save(dir_path + '/trueResponse_redRelu_closure.npy', y_train)
+        np.save(dir_path + '/predResponse_redRelu_closure.npy', y_pred)
+        np.save(dir_path + '/x_train_redRelu.npy', x_train)
 
     return
 

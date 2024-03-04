@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import uproot as ur
+import os
 ########################
 ### MPL Settings ###
 
@@ -68,26 +69,66 @@ def make_all_plots(df, output_path):
 
     print(f"Saving all figures into {output_path}")
 
-
-def normalize(x):
-    mean, std = np.mean(x), np.std(x)
+def normalize(x, pre_derived_scale=None):
+    if pre_derived_scale:
+        mean, std = pre_derived_scale[-2], pre_derived_scale[-1]
+    else:
+        mean, std = np.mean(x), np.std(x)
     out =  (x - mean) / std
     return out, mean, std
 
-def apply_save_log(x):
-
-    #########
-    epsilon = 1e-10
-    #########
-
-    minimum = x.min()
-    if x.min() <= 0:
-        x = x - x.min() + epsilon
+def apply_log(x, pre_derived_scale=None):
+    if pre_derived_scale:
+        minimum = pre_derived_scale[-4]
+        epsilon = pre_derived_scale[-3]
+    else:
+        epsilon = 1e-10
+        minimum = x.min()
+    if minimum <= 0:
+        x = x - minimum + epsilon
     else:
         minimum = 0
         epsilon = 0
-
     return np.log(x), minimum, epsilon
+
+def apply_cuts(df):
+    df = df[df["cluster_ENG_CALIB_TOT"]>0.3]
+    df = df[df["clusterE"]>0.]
+    df = df[df["cluster_CENTER_LAMBDA"]>0.]
+    df = df[df["cluster_FIRST_ENG_DENS"]>0.]
+    df = df[df["cluster_SECOND_TIME"]>0.]
+    df = df[df["cluster_SIGNIFICANCE"]>0.]
+    df = calculate_response(df)
+    return df
+
+def calculate_response(df):
+    resp = np.array( df.clusterE.values ) /  np.array( df.cluster_ENG_CALIB_TOT.values )
+    df["r_e_calculated"] = resp
+    df = df[df["r_e_calculated"]>0.1]
+    return df
+
+def apply_scale(df, field_name, mode, pre_derived_scale=None):
+    if pre_derived_scale:
+        old_scale = pre_derived_scale
+    else:
+        old_scale = None
+    if mode=='lognormalise':
+        x, minimum, epsilon = apply_log(df[field_name], old_scale)
+        x, mean, std = normalize(x, old_scale)
+        scale = ("SaveLog / Normalize", minimum, epsilon, mean, std)
+    elif mode=='normalise':
+        x = df[field_name]
+        x, mean, std = normalize(x, old_scale)
+        scale = ("Normalize", mean, std)
+    elif mode=='special':
+        x = df[field_name]
+        x = np.abs(x)**(1./3.) * np.sign(x)
+        x, mean, std = normalize(x, old_scale)
+        scale = ("Sqrt3", mean, std)
+    else:
+        raise ValueError('Scaling mode need for ', field_name)
+    df[field_name] = x
+    return df, scale
 
 #########################
 
@@ -95,42 +136,53 @@ def main():
 
     ################
     ### params ###
-
     file_path = "all_info_df"
-    file = ur.open("/home/loch/Summer2022/MLTopoCluster/data/Akt4EMTopo.topo_cluster.root")
+    file = ur.open('data/skimmed_full.root') #Akt4EMTopo.topo_cluster.root')
+    print('Found file, reading dataset... ')
     # file = ur.open("/data1/atlng02/loch/Summer2022/MLTopoCluster/data/Akt4EMTopo.clusterfiltered.topo-cluster.root")
     # file = ur.open("/home/jmsardain/JetCalib/NewFile.root")
     tree = file["ClusterTree"]
     df = tree.arrays(library="pd")
+    
+    # dividing dataset for training and test
+    df_pos = df[df["clusterE"]>0.]
+    n = len(df_pos)
+    ntrain = int(n * 0.8)
+    ntest = int(n * 0.2)
 
-    df = df[df["cluster_ENG_CALIB_TOT"]>0.3]
-    df = df[df["clusterE"]>0.]
-    df = df[df["cluster_CENTER_LAMBDA"]>0.]
-    df = df[df["cluster_FIRST_ENG_DENS"]>0.]
-    df = df[df["cluster_SECOND_TIME"]>0.]
-    df = df[df["cluster_SIGNIFICANCE"]>0.]
+    df = df_pos[:ntrain]
+    df_test_forjet  = df_pos[ntrain:ntrain+ntest]
+    df_test = df_test_forjet
+    print('\tReading dataset completed \n')
 
-    resp = np.array( df.clusterE.values ) /  np.array( df.cluster_ENG_CALIB_TOT.values )
-    df["r_e_calculated"] = resp
-    df = df[df["r_e_calculated"]>0.1]
+    print('\tApplying cuts...Takes a while...\n')
+    df = apply_cuts(df)
+    df_test = apply_cuts(df_test)
+    df_test_forjet = calculate_response(df_test_forjet)
 
-    print(df.columns)
+    print('Training features: \n', df.columns)
 
-    column_names = [ 'r_e_calculated', 'weight_response', 'weight_response_wider', 'weight_energy', 'weight_logenergy',
-                        'clusterE', 'clusterEta',
+    response = ['r_e_calculated']
+    column_names = [    'clusterE', 'clusterEta',
                         'cluster_CENTER_LAMBDA', 'cluster_CENTER_MAG', 'cluster_ENG_FRAC_EM', 'cluster_FIRST_ENG_DENS',
                         'cluster_LATERAL', 'cluster_LONGITUDINAL', 'cluster_PTD', 'cluster_time', 'cluster_ISOLATION',
                         'cluster_SECOND_TIME', 'cluster_SIGNIFICANCE', 'nPrimVtx', 'avgMu',
-                        ]
+                    ] # 'weight_response', 'weight_response_wider', 'weight_energy', 'weight_logenergy',
 
-    before = df
-    df = df[column_names]
+    ref_column_names = ['jetCnt', 'jetNConst', 'nCluster', 'clusterIndex', 'jetCalE', 'jetRawE', 
+                        'truthJetE', 'truthJetPt', 'truthJetRap', 'clusterECalib']
 
-    output_path_figures_before_preprocessing = "fig.pdf"
+    #before = df
+    df = df[response+column_names]
+    df_test = df_test[response+column_names+ref_column_names]
+    df_test_forjet = df_test_forjet[response+column_names+ref_column_names]
+    df_pos = df_pos[column_names+ref_column_names]
+
+    #output_path_figures_before_preprocessing = "fig.pdf"
     output_path_figures_after_preprocessing = "fig2.pdf"
     output_path_data = "data/" + file_path + ".npy"
 
-    save = True
+    save = True #True
     scales_txt_file =  output_path_data[:-4] + "_scales.txt"
 
     ####################
@@ -146,9 +198,7 @@ def main():
     #df = df.drop(idx_min)
     #print(df.shape)
 
-    print(df)
-
-
+    print('Training dataset: \n', df)
 
     #####################
     ### preprocessing ###
@@ -159,78 +209,64 @@ def main():
     # log-preprocessing
     field_names = ["clusterE", "cluster_CENTER_LAMBDA", "cluster_FIRST_ENG_DENS", "cluster_SECOND_TIME", "cluster_SIGNIFICANCE"]
     for field_name in field_names:
-        x, minimum, epsilon = apply_save_log(df[field_name])
-        x, mean, std = normalize(x)
-        scales[field_name] = ("SaveLog / Normalize", minimum, epsilon, mean, std)
-        df[field_name] = x
+        df_test_forjet, scales[field_name] = apply_scale(df_test_forjet, field_name, 'lognormalise')
+        df = apply_scale(df, field_name, 'lognormalise', scales[field_name])[0]
+        df_test = apply_scale(df_test, field_name, 'lognormalise', scales[field_name])[0]
 
     # just normalizing
-    field_names = ["clusterEta", "cluster_CENTER_MAG", "nPrimVtx", "avgMu"]
+    field_names = ["clusterEta", "cluster_CENTER_MAG", "nPrimVtx", "avgMu", "cluster_ENG_FRAC_EM", "cluster_LATERAL", 
+                "cluster_LONGITUDINAL", "cluster_PTD", "cluster_ISOLATION"]
     for field_name in field_names:
-        x = df[field_name]
-        x, mean, std = normalize(x)
-        scales[field_name] = ("Normalize", mean, std)
-        df[field_name] = x
-
-    # params between [0, 1]
-    # we could also just shift?
-    field_names = ["cluster_ENG_FRAC_EM", "cluster_LATERAL", "cluster_LONGITUDINAL", "cluster_PTD", "cluster_ISOLATION"]
-    for field_name in field_names:
-        x = df[field_name]
-        x, mean, std = normalize(x)
-        scales[field_name] = ("Normalize", mean, std)
-        df[field_name] = x
+        df_test_forjet, scales[field_name] = apply_scale(df_test_forjet, field_name, 'normalise')
+        df = apply_scale(df, field_name, 'normalise', scales[field_name])[0]
+        df_test = apply_scale(df_test, field_name, 'normalise', scales[field_name])[0]
 
     # special preprocessing
     field_name = "cluster_time"
-    x = df[field_name]
-    x = np.abs(x)**(1./3.) * np.sign(x)
-    x, mean, std = normalize(x)
-    #x = np.tanh(x)
-    #x = x + np.abs(x.min()) + 1
-    #x = apply_save_log(df[field_name])
-    #x = normalize(x)
-    scales[field_name] = ("Sqrt3", mean, std)
-    df[field_name] = x
+    df_test_forjet, scales[field_name] = apply_scale(df_test_forjet, field_name, 'special')
+    df = apply_scale(df, field_name, 'special', scales[field_name])[0]
+    df_test = apply_scale(df_test, field_name, 'special', scales[field_name])[0]
 
     # no preprocessing
     #files_names = ["r_e_calculated"]
-
     ######################
 
     print("-"*100)
-    print("Make plots after preprocessing..,")
+    print("Make plots after preprocessing...,")
 
     # plots after preprocessing
-    # make_all_plots(df, output_path_figures_after_preprocessing)
+    make_all_plots(df, output_path_figures_after_preprocessing)
 
     if save:
-        brr = before.to_numpy()
+        #brr = before.to_numpy()
         arr = df.to_numpy()
-        print(arr.shape)
-        print(scales)
-        np.save(output_path_data, arr)
-        print("Saved as {output_path_data}")
+        arr_test = df_test.to_numpy()
+        arr_test_forjet = df_test_forjet.to_numpy()
+        print('Training array shape: ', arr.shape)
+        print('Feature scale:', scales)
+        print('Saving all unscaled data...')
+        np.save(output_path_data, df_pos.to_numpy())
+        #print("Saved as {output_path_data}")
         with open(scales_txt_file, "w") as f:
             f.write(str(scales))
 
+        #n = len(arr)
+        #ntrain = int(n * 0.8)
+        #ntest = int(n * 0.2)
+        #train = arr[:ntrain]
+        #test  = arr_w_ref[ntrain:ntrain+ntest]
+        ##val  = arr[ntrain+ntest:]
+        ### clusterE / response = true energy should be higher than 0.3
+        ##test_before= brr[ntrain:ntrain+ntest]
 
-        n = len(arr)
-        ntrain = int(n * 0.6)
-        ntest = int(n * 0.2)
-
-        train = arr[:ntrain]
-        val  = arr[ntrain+ntest:]
-        test  = arr[ntrain:ntrain+ntest]
-        ## clusterE / response = true energy should be higher than 0.3
-
-
-        test_before= brr[ntrain:ntrain+ntest]
-
-        np.save("data/all_info_df_train.npy", train)
-        np.save("data/all_info_df_test.npy", test)
-        np.save("data/all_info_df_val.npy", val)
-        np.save("data/all_info_df_test_before.npy", test_before)
+        print('Saving training data...')
+        np.save("data/all_info_df_train.npy", arr)
+        print('Saving test data after selection...')
+        np.save("data/all_info_df_test.npy", arr_test)
+        print('Saving test data without selection...')
+        np.save("data/all_info_df_test_forjet.npy", arr_test_forjet)
+        #np.save("data/all_info_df_val.npy", val)
+        #np.save("data/all_info_df_test_before.npy", test_before)
 
 if __name__ == "__main__":
     main()

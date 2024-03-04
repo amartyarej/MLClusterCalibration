@@ -4,7 +4,7 @@ import pandas as pd
 from scipy.stats import pearsonr, mode, iqr
 import math
 import argparse
-from rootplotting import ap
+import rootplotting as ap
 from rootplotting.tools import *
 from root_numpy import fill_hist
 
@@ -48,7 +48,7 @@ def RespVsResponse_Peter(energy, resp, xlabel, ylabel):
         c1 = ap.canvas(batch=True, size=(600,600))
         h1slice = h1.ProjectionY('h1slice'+str(ibinx), ibinx, ibinx)
         c1.hist(h1slice,        option='PE', markercolor=ROOT.kRed)
-        c1.save("./h1slice"+str(ibinx)+".png")
+        #c1.save("out/plots/h1slice"+str(ibinx)+".png")
         if h1slice.GetEntries() > 0:
             binmax = h1slice.GetMaximumBin()
             x = h1slice.GetXaxis().GetBinCenter(binmax)
@@ -108,7 +108,7 @@ def RespVsEnergy_Peter(energy, resp, xlabel, ylabel):
         c1 = ap.canvas(batch=True, size=(600,600))
         h1slice = h1.ProjectionY('h1slice'+str(ibinx), ibinx, ibinx)
         c1.hist(h1slice,        option='PE', markercolor=ROOT.kRed)
-        c1.save("./h1slice"+str(ibinx)+".png")
+        #c1.save("out/plots/h1slice"+str(ibinx)+".png")
         if h1slice.GetEntries() > 0:
             binmax = h1slice.GetMaximumBin()
             x = h1slice.GetXaxis().GetBinCenter(binmax)
@@ -238,9 +238,10 @@ def Histo1D_2vars(varx1, varx2, minx, maxx, xlabel='', label1='', label2='', log
 def main():
     ROOT.gStyle.SetPalette(ROOT.kBird)
 
+    """
     for i in range(0, 1):
         ## Take correct path
-        if i==0:  path = '/home/jmsardain/JetCalib/DNN/train_test_1tanh/'
+        if i==0:  path = 'out/' #'/home/jmsardain/JetCalib/DNN/train_test_1tanh/'
         if i==1:  path = '/home/jmsardain/JetCalib/DNN/train_noweight_100epochs_batch2048_lr0p0001/'
         if i==1:  path = '/home/jmsardain/JetCalib/DNN/train_weightEnergy_100epochs_batch2048_lr0p0001/'
         if i==2:  path = '/home/jmsardain/JetCalib/DNN/train_weightLogEnergy_100epochs_batch2048_lr0p0001/'
@@ -256,88 +257,111 @@ def main():
         if i ==10: 
             superscript = 'BNN'
         else:
-            superscript = 'DNN'
-        outdir = path + '/plots/'
-        try:
-            os.system("mkdir {}".format(outdir))
-        except ImportError:
-            print("{} already exists".format(outdir))
-            pass
+    """
+    
+    path = 'out/'
+    outdir = path + '/plots/'
+    superscript = 'DNN'
+    
+    try:
+        os.system("mkdir {}".format(outdir))
+    except ImportError:
+        print("{} already exists".format(outdir))
+        pass
 
-        ## Get information
-        resp_test = np.load(path+'/trueResponse.npy')
-        resp_pred = np.load(path+'/predResponse.npy')
-        x_test    = np.load(path+'/x_test.npy')
+    ## Get information
+    resp_test = np.load(path+'/trueResponse_redRelu.npy') # y_test or R_EM
+    resp_pred = np.load(path+'/predResponse_redRelu.npy') # y_pred or R_DNN
+    x_test    = np.load(path+'/x_test_redRelu.npy')
 
-        std_scale = 1.4016793
-        mean_scale =1.4141768
-        energy_log = x_test[:, 0] * std_scale + mean_scale
-        energy = np.exp(energy_log)
-        
+    # FIXED SCALE - TO BE FIXED
+    std_scale = 1.4016793
+    mean_scale =1.4141768
 
-        predE = energy * 1. / resp_pred
-        trueE = energy * 1. / resp_test
-        recoE = energy
-        try:
-            ## Start plotting
-            c = Histo1D(resp_pred/resp_test, 0, 10, label=r'R^{'+superscript+'} / R^{EM}', logxaxis=False)
-            c.save(outdir+"/ratio.png")
-        except AttributeError:
-            print('ratio.png is not produced')
+    energy_log = x_test[:, 0] * std_scale + mean_scale
+    energy = np.exp(energy_log)
 
-        try:
-            c = Histo1D_2vars(trueE, predE, -1, 3, xlabel='Energy [GeV]', label1=r'E^{dep}',label2=r'E^{'+superscript+'}', logxaxis=True)
-            c.save(outdir+"/energy_1d.png")
-        except AttributeError:
-            print('energy_1d.png is not produced')
+    trueE = energy * 1. / resp_test # E_dep = E_EM/R_EM
+    predE = energy * 1. / resp_pred # E_DNN = E_EM/R_DNN
+    recoE = energy                  # E_EM
 
-        try:
-            c = Histo1D_2vars(resp_test, resp_pred, 0, 10, xlabel='Response', label1=r'R^{em}',label2=r'R^{'+superscript+'}', logxaxis=False)
-            c.save(outdir+"/response_1d.png")
-        except AttributeError:
-            print('response_1d.png is not produced')
+    #ref_column_names = ['jetCnt', 'jetNConst', 'nCluster', 'clusterIndex', 'jetCalE', 'jetRawE', 
+    #                    'truthJetE', 'truthJetPt', 'truthJetRap', 'clusterECalib']
+    mu              = x_test[:, 11]
+    jetCnt          = x_test[:, 12]
+    jetNConst       = x_test[:, 13]
+    nCluster        = x_test[:, 14]
+    clusterIndex    = x_test[:, 15]
+    jetCalE         = x_test[:, 16]
+    jetRawE         = x_test[:, 17]
+    truthJetE       = x_test[:, 18]
+    truthJetPt      = x_test[:, 19]
+    truthJetRap     = x_test[:, 20]
+    clusterECalib   = x_test[:, 21]
 
-        try:
-            c = RespVsEnergy_Peter(trueE, resp_pred/resp_test, xlabel=r'E^{dep} [GeV]', ylabel=r'R^{'+superscript+'} / R^{EM}')
-            c.ylim(0, 2)
-            c.save(outdir+"/Rpred_Over_Rem_vs_Edep.png")
-        except AttributeError:
-            print('Rpred_Over_Rem_vs_Edep.png is not produced')
 
-        try:
-            c = RespVsEnergy_Peter(trueE, predE/recoE, xlabel=r'E^{dep} [GeV]', ylabel=r'E^{'+superscript+'} / E^{EM}')
-            c.ylim(0, 2)
-            c.save(outdir+"/Epred_Over_Eem_vs_Edep.png")
-        except AttributeError:
-            print('Epred_Over_Eem_vs_Edep.png is not produced')
 
-        try:
-            c = RespVsEnergy_Peter(recoE, predE/trueE, xlabel=r'E^{EM} [GeV]', ylabel=r'E^{'+superscript+'} / E^{dep}')
-            c.ylim(0, 2)
-            c.save(outdir+"/Epred_Over_Edep_vs_Eem.png")
-        except AttributeError:
-            print('Epred_Over_Edep_vs_Eem.png is not produced')
 
-        try:
-            c = RespVsEnergy_Peter(trueE, resp_pred, xlabel=r'E^{dep} [GeV]', ylabel=r'R^{'+superscript+'}')
-            c.ylim(0, 2)
-            c.save(outdir+"/Rpred_vs_Edep.png")
-        except AttributeError:
-            print('Rpred_vs_Edep.png is not produced')
+    try:
+        ## Start plotting
+        c = Histo1D(resp_pred/resp_test, 0, 10, label=r'R^{'+superscript+'} / R^{EM}', logxaxis=False)
+        c.save(outdir+"/ratio.png")
+    except AttributeError:
+        print('ratio.png is not produced')
 
-        try:
-            c = RespVsEnergy_Peter(trueE, resp_test, xlabel=r'E^{dep} [GeV]', ylabel=r'R^{EM}')
-            c.ylim(0, 2)
-            c.save(outdir+"/Rem_vs_Edep.png")
-        except AttributeError:
-            print('Rem_vs_Edep.png is not produced')
+    try:
+        c = Histo1D_2vars(trueE, predE, -1, 3, xlabel='Energy [GeV]', label1=r'E^{dep}',label2=r'E^{'+superscript+'}', logxaxis=True)
+        c.save(outdir+"/energy_1d.png")
+    except AttributeError:
+        print('energy_1d.png is not produced')
 
-        try:
-            c = RespVsResponse_Peter(resp_test, resp_pred/resp_test, xlabel=r'R^{EM}', ylabel=r'R^{'+superscript+'} / R^{EM}')
-            c.ylim(0, 2)
-            c.save(outdir+"/Rpred_Over_Rem_vs_Rem.png")
-        except AttributeError:
-            print('Rpred_Over_Rem_vs_Rem.png is not produced')
+    try:
+        c = Histo1D_2vars(resp_test, resp_pred, 0, 10, xlabel='Response', label1=r'R^{em}',label2=r'R^{'+superscript+'}', logxaxis=False)
+        c.save(outdir+"/response_1d.png")
+    except AttributeError:
+        print('response_1d.png is not produced')
+
+    try:
+        c = RespVsEnergy_Peter(trueE, resp_pred/resp_test, xlabel=r'E^{dep} [GeV]', ylabel=r'R^{'+superscript+'} / R^{EM}')
+        c.ylim(0, 2)
+        c.save(outdir+"/Rpred_Over_Rem_vs_Edep.png")
+    except AttributeError:
+        print('Rpred_Over_Rem_vs_Edep.png is not produced')
+
+    try:
+        c = RespVsEnergy_Peter(trueE, predE/recoE, xlabel=r'E^{dep} [GeV]', ylabel=r'E^{'+superscript+'} / E^{EM}')
+        c.ylim(0, 2)
+        c.save(outdir+"/Epred_Over_Eem_vs_Edep.png")
+    except AttributeError:
+        print('Epred_Over_Eem_vs_Edep.png is not produced')
+
+    try:
+        c = RespVsEnergy_Peter(recoE, predE/trueE, xlabel=r'E^{EM} [GeV]', ylabel=r'E^{'+superscript+'} / E^{dep}')
+        c.ylim(0, 2)
+        c.save(outdir+"/Epred_Over_Edep_vs_Eem.png")
+    except AttributeError:
+        print('Epred_Over_Edep_vs_Eem.png is not produced')
+
+    try:
+        c = RespVsEnergy_Peter(trueE, resp_pred, xlabel=r'E^{dep} [GeV]', ylabel=r'R^{'+superscript+'}')
+        c.ylim(0, 2)
+        c.save(outdir+"/Rpred_vs_Edep.png")
+    except AttributeError:
+        print('Rpred_vs_Edep.png is not produced')
+
+    try:
+        c = RespVsEnergy_Peter(trueE, resp_test, xlabel=r'E^{dep} [GeV]', ylabel=r'R^{EM}')
+        c.ylim(0, 2)
+        c.save(outdir+"/Rem_vs_Edep.png")
+    except AttributeError:
+        print('Rem_vs_Edep.png is not produced')
+
+    try:
+        c = RespVsResponse_Peter(resp_test, resp_pred/resp_test, xlabel=r'R^{EM}', ylabel=r'R^{'+superscript+'} / R^{EM}')
+        c.ylim(0, 2)
+        c.save(outdir+"/Rpred_Over_Rem_vs_Rem.png")
+    except AttributeError:
+        print('Rpred_Over_Rem_vs_Rem.png is not produced')
 
     return
 
