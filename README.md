@@ -2,13 +2,22 @@
 
 ## Running the code
 
-If you are running on the Chicago server, you do not really need to do much (all dependencies are already installed). If you are not running on the Chicago servers, you can find all the packages needed in the file called environment.yml
-
-For using Dortmund E4, use:
+The training and evaluation part (NOT FOR plotting) needs an environment setup provided in Dortmund E4. For using this (preferably in GPU enabled machine), use:
 ```
 conda activate swbase
 ```
 
+The plotting part needs an older setup available in CVMFS (via lxplus). For using it:
+```
+source setup.sh
+```
+
+The large dataset can be obtained from `/ceph/groups/e4/users/arej/MLClusterCalibration/data/Akt4EMTopo.topo-cluster.root`. A skimming macro is used (`skim.C`) to skim the required branches along with some selection that removes a large number of cluster entries and stores the skimmed dataset. It can be obtained from `/ceph/groups/e4/users/arej/MLClusterCalibration/data/skimmed_full.root`
+
+The output folder is assumed to be at `out`, that has to be created as:
+```
+mkdir out
+```
 
 The first code you need reads the ROOT file that contains the clusters info, transforms the input features and split the dataset into train, val, test.
 The whole dataset is also stored, unchanged, in order to be able to plot the prediction at the end w.r.t. variables we do not train on.
@@ -30,9 +39,12 @@ python train.py --test    --outdir out
 
 The output of the training/testing code is a bunch of numpy arrays. You can either create your own code to plot, or rely on this.
 
-In a clean terminal
+The plotting part needs an older setup available in CVMFS (via lxplus). For using it:
 ```
-source /cvmfs/sft.cern.ch/lcg/views/LCG_88/x86_64-slc6-gcc49-opt/setup.sh
-export PYTHONPATH=$PWD:$PYTHONPATH
+source setup.sh
+```
+
+Then run the plotting script:
+```
 python plotting.py
 ```
