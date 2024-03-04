@@ -7,11 +7,6 @@ The training and evaluation part (NOT FOR plotting) needs an environment setup p
 conda activate swbase
 ```
 
-The plotting part needs an older setup available in CVMFS (via lxplus). For using it:
-```
-source setup.sh
-```
-
 The large dataset can be obtained from `/ceph/groups/e4/users/arej/MLClusterCalibration/data/Akt4EMTopo.topo-cluster.root`. A skimming macro is used (`skim.C`) to skim the required branches along with some selection that removes a large number of cluster entries and stores the skimmed dataset. It can be obtained from `/ceph/groups/e4/users/arej/MLClusterCalibration/data/skimmed_full.root`
 
 The output folder is assumed to be at `out`, that has to be created as:
