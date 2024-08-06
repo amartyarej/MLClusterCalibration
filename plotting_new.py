@@ -86,7 +86,7 @@ if __name__ == "__main__":
         "font.family": "Helvetica"
     })
 
-    path = args.filepath+'/'
+    path = args.filepath+'/' 
     phase_space = args.phase_space #'AllClusters/' # 'selectedClusters/'
     model_name = args.model # "redRelu" #"original"
     outdir_clus = path+'plots/'+phase_space+'/cluster/'+model_name+'/'
