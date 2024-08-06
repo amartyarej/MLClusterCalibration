@@ -1,5 +1,12 @@
 void skim(){
-	// skimming Peter's sample to save with seqNumber%1000==0 out of total events: 138884772
+	// Peter's sample total events: 		138884772
+	// % in mu bins: [0,20,30,40,50,60,70]:
+	// 4.06, 22.75, 30.96, 18.07, 17.76, 4.93
+	// % of R>10: 29.00
+	// Chris' mc20e  sample total events: 	  2083009
+	// % in mu bins: [0,20,30,40,50,60,70]:
+	// 5.24, 23.05, 32.18, 28.51, 8.88, 0.82
+	// % of R>10: 28.05
 	float cluster_ENG_CALIB_TOT_t=0.;
 	float clusterE_t=0.;
 	float cluster_CENTER_LAMBDA_t=0.;
@@ -30,7 +37,7 @@ void skim(){
 	TTree *t_out; TFile *outfile;
 
 	//outfile = new TFile("/eos/home-a/arej/temp/MLCalib_skim/skimmed.root", "RECREATE");
-	outfile = new TFile("/ceph/groups/e4/users/arej/MLClusterCalibration/data/skimmed_full.root", "RECREATE");
+	outfile = new TFile("/ceph/groups/e4/users/arej/MLClusterCalibration/data/Chris/fromChris_EOS_Jul24_ntuple/skimmed_full_mc23d.root", "RECREATE");
 	t_out = new TTree("ClusterTree", "ClusterTree");
 
 	t_out->Branch("cluster_ENG_CALIB_TOT", &cluster_ENG_CALIB_TOT_t);
@@ -61,7 +68,9 @@ void skim(){
 	t_out->Branch("clusterECalib", &clusterECalib);
 	
 	//TFile *f = TFile::Open("/eos/home-l/loch/MLClusterCalibration/data.06.21.2023/Akt4EMTopo.topo-cluster.root");
-	TFile *f = TFile::Open("/ceph/groups/e4/users/arej/MLClusterCalibration/data/Akt4EMTopo.topo-cluster.root");
+	//TFile *f = TFile::Open("/ceph/groups/e4/users/arej/MLClusterCalibration/data/Peter/Akt4EMTopo.topo-cluster.root"); // Peter's sample copied to E4
+	//TFile *f = TFile::Open("/ceph/groups/e4/users/arej/MLClusterCalibration/data/Chris/fromChris_EOS_Jul24_ntuple/merged_mc20e_withPU.root"); // Chris' sample copied to E4
+	TFile *f = TFile::Open("/ceph/groups/e4/users/arej/MLClusterCalibration/data/Chris/fromChris_EOS_Jul24_ntuple/merged_mc23d_withPU.root");
 	TTree *t = (TTree*)f->Get("ClusterTree");
 	cout<<"ClusterTree has "<<t->GetEntries()<<" entries..."<<endl;
 	
@@ -94,7 +103,8 @@ void skim(){
 	
 	for(int i=0;i<t->GetEntries();++i){ //t->GetEntries()
 		t->GetEntry(i); 
-		//if(i%1000==0){
+		//if(i%100==0){
+		//if(avgMu_t>20){
 		if(i%1000000==0){cout<<"Passed "<<i<<" ..."<<endl;}
 		t_out->Fill();
 		//}

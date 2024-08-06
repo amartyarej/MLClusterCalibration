@@ -136,13 +136,17 @@ def main():
 
     ################
     ### params ###
-    file_path = "all_info_df"
-    file = ur.open('data/skimmed_full.root') #Akt4EMTopo.topo_cluster.root')
-    print('Found file, reading dataset... ')
-    # file = ur.open("/data1/atlng02/loch/Summer2022/MLTopoCluster/data/Akt4EMTopo.clusterfiltered.topo-cluster.root")
-    # file = ur.open("/home/jmsardain/JetCalib/NewFile.root")
-    tree = file["ClusterTree"]
-    df = tree.arrays(library="pd")
+
+    input_path = "data/Chris/fromChris_EOS_Jul24_ntuple/"
+    skim_file_suffix = "_full_mc23d"
+    output_path = "data/Chris/fromChris_EOS_Jul24_datasets/mc23d/"
+
+    full_df_name = "all_info_df"
+    input_file_name = input_path+'skimmed'+skim_file_suffix+'.root'
+    input_file = ur.open(input_file_name) #Akt4EMTopo.topo_cluster.root')
+    print('Found file, reading dataset from', input_file_name, '\n')
+    input_tree = input_file["ClusterTree"]
+    df = input_tree.arrays(library="pd")
     
     # dividing dataset for training and test
     df_pos = df[df["clusterE"]>0.]
@@ -178,9 +182,8 @@ def main():
     df_test_forjet = df_test_forjet[response+column_names+ref_column_names]
     df_pos = df_pos[column_names+ref_column_names]
 
-    #output_path_figures_before_preprocessing = "fig.pdf"
-    output_path_figures_after_preprocessing = "fig2.pdf"
-    output_path_data = "data/" + file_path + ".npy"
+    output_path_figures_after_preprocessing = output_path+"preprocessing.pdf"
+    output_path_data = output_path + full_df_name + ".npy"
 
     save = True #True
     scales_txt_file =  output_path_data[:-4] + "_scales.txt"
@@ -188,7 +191,7 @@ def main():
     ####################
     ### read in data ###
 
-    # df = pd.read_csv(file_path, sep=" ")
+    # df = pd.read_csv(full_df_name, sep=" ")
 
     # remove first index
     # df = df.iloc[:, 1:]
@@ -239,9 +242,13 @@ def main():
 
     if save:
         #brr = before.to_numpy()
-        arr = df.to_numpy()
-        arr_test = df_test.to_numpy()
-        #arr_test_forjet = df_test_forjet.to_numpy()
+        # arr = df.to_numpy()
+        # arr_test = df_test.to_numpy()
+        # arr_test_forjet = df_test_forjet.to_numpy()
+        arr = np.array(df.values)
+        arr_test = np.array(df_test.values)
+        arr_test_forjet = np.array(df_test_forjet.values)
+        
         print('Training array shape: ', arr.shape)
         print('Feature scale:', scales)
         #print('Saving all unscaled data...')
@@ -260,11 +267,11 @@ def main():
         ##test_before= brr[ntrain:ntrain+ntest]
 
         print('Saving training data...')
-        np.save("data/all_info_df_train.npy", arr)
+        np.save(output_path+"all_info_df_train.npy", arr)
         print('Saving test data after selection...')
-        np.save("data/all_info_df_test.npy", arr_test)
-        #print('Saving test data without selection...')
-        #np.save("data/all_info_df_test_forjet.npy", arr_test_forjet)
+        np.save(output_path+"all_info_df_test.npy", arr_test)
+        print('Saving test data without selection...')
+        np.save(output_path+"all_info_df_test_forjet.npy", arr_test_forjet)
         #np.save("data/all_info_df_val.npy", val)
         #np.save("data/all_info_df_test_before.npy", test_before)
 
